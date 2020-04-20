@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 # Why didn't I do this sooner?
 
@@ -46,16 +47,6 @@ gate = np.array([[1, 0, 0, 0, 0, 0, 0],
 
 psi_out = np.array([np.matmul(gate, psi_input[j]) for j in range(len(psi_input))])
 heralding_prob = [np.abs(psi_out[i, 1] * psi_out[i, 5]) for i in range(len(psi_out))]
-fidelities = np.abs([compute_overlap(psi_out[0, 0], psi_ideal[0, 0]) *
-                     compute_overlap(psi_out[0, 4], psi_ideal[0, 4]),
-                     compute_overlap(psi_out[1, 0], psi_ideal[1, 0]) *
-                     compute_overlap(psi_out[1, 3], psi_ideal[1, 3]),
-                     compute_overlap(psi_out[2, 1], psi_ideal[2, 1]) *
-                     compute_overlap(psi_out[2, 4], psi_ideal[2, 4]),
-                     compute_overlap(psi_out[3, 1], psi_ideal[3, 1]) *
-                     compute_overlap(psi_out[3, 3], psi_ideal[3, 3])])
-fidelities = [fidelities[i] if fidelities[i] <= 1 else 1
-                          for i in range(len(psi_out))]
+truth_table = np.square([[psi_out[i, 0] * psi_out[i, 4], psi_out[i, 0] * psi_out[i, 3], psi_out[i, 1] * psi_out[i, 4],
+                         psi_out[i, 1] * psi_out[i, 3]] for i in range(len(psi_out))])
 
-a = [1 / heralding_prob[i] for i in range(len(psi_out))]
-print(fidelities)
