@@ -182,7 +182,7 @@ def get_heralded_gate_rate(rel_error=0, nsamples=1):
     gate_basis = np.array(bosonic.fock.basis(4, 7))
     output_probs_agg = np.ndarray(shape=(nsamples,4,4),dtype=np.double)
     for x in range(nsamples):
-        gatey_b = bosonic.aa_phi(np.array(imperfect_cnot_gate_general(rel_error), dtype=complex), 4)
+        gatey_b = bosonic.aa_phi(np.array(imperfect_cnot_gate(rel_error), dtype=complex), 4)
         desired_inputs = np.array([[1,1,0,1,0,1,0], [1,1,0,0,1,1,0],[0,1,1,1,0,1,0],[0,1,1,0,1,1,0]])
         # c0t0, c0t1, c1t0, c1t1
         input_indices = np.ndarray(shape=(4, 1), dtype=int) # indices of the large gate basis above
