@@ -1,1 +1,1 @@
-# durip-2020
+# quantum-photonic-cnot-gate
