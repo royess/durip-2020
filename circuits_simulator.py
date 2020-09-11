@@ -8,19 +8,20 @@ import functools
     The matrix of a mzi component 
 '''
 def mzi(alpha, phi):
-    return np.array([
-        [np.exp(1j*phi) * np.sin(alpha/2), np.exp(1j*phi) * np.cos(alpha/2)],
-        [np.cos(alpha/2), -np.sin(alpha/2)]
-    ]) # TODO: whether this is a good expression!
+    return (1/2) * np.array([
+        [np.exp(1j*phi) * (np.exp(1j*alpha)+1), np.exp(1j*alpha)-1],
+        [np.exp(1j*phi) * (np.exp(1j*alpha)-1), np.exp(1j*alpha)+1]
+    ]) # TODO: whether this is the right expression!
 
 '''
     Generalized quantum circuit
 '''
 class Circuit:
-    def __init__(self, numModes, alphaArr, phiArr):
+    def __init__(self, numModes, alphaArr, phiArr, phaseShiftArr):
         self.numModes = numModes
         self.alphaArr = alphaArr
         self.phiArr = phiArr
+        self.phaseShiftArr = phaseShiftArr
         
         '''
             Multiply matrices by order:
@@ -38,7 +39,8 @@ class Circuit:
                 np.eye(pair[1]-1),
                 mzi(alphaArr[pair[0]-1,pair[1]-1], phiArr[pair[0]-1,pair[1]-1]),
                 np.eye(numModes-1-pair[1]))
-             for pair in orderedPairs])
+             for pair in orderedPairs]) * np.exp(1j*np.diag(self.phaseShiftArr))
+        
     
     '''
         Parameters:
@@ -72,14 +74,16 @@ class Circuit:
             outputProb /= outputProb.sum(axis=0)
         
         return outputProb
-        
+
 class IdealCNOTCircuit(Circuit):
     '''
         alpha_arr, phi_arr is taken from Supplementary Material S3.4
+        
+        NOTE: THESE PARAMETERS NO LONGER WORKS!!!
     '''
     def __init__(self):
         alphaArr = np.array([
-            [3.142, 3.142, 3.142, 3.142, 3.142, 3.142],
+            [0, 0, 0, 0, 0, 0],
             [0., 0.992, 1.571, 4.957, 1.792, 0.],
             [0., 0., 1.571, 0.992, 0., 0],
             [0., 0., 0., 1.571, 0., 2.226],
@@ -96,8 +100,9 @@ class IdealCNOTCircuit(Circuit):
             [0., 0., 0., 0., 0., 0.]
         ])
         
+        phaseshiftArr = np.zeros(7)
         
-        super(IdealCNOTCircuit, self).__init__(7, alphaArr, phiArr)
+        super(IdealCNOTCircuit, self).__init__(7, alphaArr, phiArr, phaseshiftArr)
     
     def getTruthTable(self):
         inputStates = np.array([[1, 1, 0, 1, 0, 1, 0],
