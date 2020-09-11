@@ -14,107 +14,107 @@ def mzi(alpha, phi):
     ]) # TODO: whether this is the right expression!
 
 '''
-    Generalized quantum circuit
+    Compute multi-photon unitary matrix from phase array.
+
+    phaseArr: total lenth is m**2.
+    The composition:
+        - phaseArr[0:m*(m-1)/2] is alphas;
+        - phaseArr[m*(m-1)/2:m*(m-1)] is phis;
+        - the remaining part is phase shifts on each m modes.
 '''
-class Circuit:
-    def __init__(self, numModes, alphaArr, phiArr, phaseShiftArr):
-        self.numModes = numModes
-        self.alphaArr = alphaArr
-        self.phiArr = phiArr
-        self.phaseShiftArr = phaseShiftArr
-        
-        '''
-            Multiply matrices by order:
-            (m-1,m-1),
-            (m-2,m-2), (m-2,m-1),
-            ...,
-            (1,1), (1,2), ..., (1,m-1)
-        ''' 
-        orderedPairs = [
-            (i,j) for i in np.arange(numModes-1,1-1,-1)
-            for j in np.arange(i,numModes,1) ]
+def getMultiPhotonU(numModes, numPhotons, phaseArr):
 
-        self.singleU = np.linalg.multi_dot(
-            [block_diag(
-                np.eye(pair[1]-1),
-                mzi(alphaArr[pair[0]-1,pair[1]-1], phiArr[pair[0]-1,pair[1]-1]),
-                np.eye(numModes-1-pair[1]))
-             for pair in orderedPairs]) * np.exp(1j*np.diag(self.phaseShiftArr))
-        
+    '''
+        Multiply matrices by order:
+        (m-1,m-1),
+        (m-2,m-2), (m-2,m-1),
+        ...,
+        (1,1), (1,2), ..., (1,m-1)
+    ''' 
+    orderedPairs = [
+        (i,j) for i in np.arange(numModes-1,1-1,-1)
+        for j in np.arange(i,numModes,1) ]
+
+    def getIdx(i, j, numModes):
+        return ((1/2*(2*numModes-i)*(i-1) + (j-i)))
+
+    singleU =  np.linalg.multi_dot(
+        [np.diag(np.exp(1j*phaseArr[numModes*(numModes-1):]))]
+        + [block_diag(
+            np.eye(pair[1]-1),
+            mzi(
+                phaseArr[int(getIdx(pair[0],pair[1],numModes))],
+                phaseArr[int(getIdx(pair[0],pair[1],numModes) + numModes*(numModes-1)/2)]),
+            np.eye(numModes-1-pair[1]))
+            for pair in orderedPairs])
+
+    return bosonic.aa_phi(singleU.astype('complex'), numPhotons)
+
+'''
+    Compute output probabilities wrt input states
+'''
+def getOutputProb(numModes, numPhotons, phaseArr, inputStates, isNormalized=False):
+    fockU = getMultiPhotonU(numModes, numPhotons, phaseArr)
+    inputIndices = np.ndarray(shape=(numPhotons, 1), dtype=int)
+    fockBasis = np.array(bosonic.fock.basis(numPhotons, numModes))
     
-    '''
-        Parameters:
-            numPhotons: number of photons
-            inputStates: an array of numModes x "num of input states"
-            isNormalized: whether normalize the probability to
-        Return:
-            outputProb: probabilities to find output in each input states,
-                        an array of "num of input states" x "num of input states"
-            
-    '''
-    def transform(self, numPhotons, inputStates, isNormalized=False):
-        fockU = bosonic.aa_phi(self.singleU.astype('complex'), numPhotons)
-        inputIndices = np.ndarray(shape=(numPhotons, 1), dtype=int)
-        fockBasis = np.array(bosonic.fock.basis(numPhotons, self.numModes))
-        
-        inputIndices = np.array([
-            np.where((fockBasis == inputStates[i]).all(axis=1))
-            for i in range(np.size(inputStates, 0))
-        ], dtype=int)
-        
-        inputComp = np.zeros((fockBasis.shape[0], numPhotons), dtype='complex')
-
-        for i in range(numPhotons):
-            inputComp[inputIndices[i,0], i] = 1
-            
-        outputComp = fockU.dot(inputComp)
-        outputProb = np.abs(outputComp)[inputIndices].T ** 2
-        
-        if isNormalized:
-            outputProb /= outputProb.sum(axis=0)
-        
-        return outputProb
-
-class IdealCNOTCircuit(Circuit):
-    '''
-        alpha_arr, phi_arr is taken from Supplementary Material S3.4
-        
-        NOTE: THESE PARAMETERS NO LONGER WORKS!!!
-    '''
-    def __init__(self):
-        alphaArr = np.array([
-            [0, 0, 0, 0, 0, 0],
-            [0., 0.992, 1.571, 4.957, 1.792, 0.],
-            [0., 0., 1.571, 0.992, 0., 0],
-            [0., 0., 0., 1.571, 0., 2.226],
-            [0., 0., 0., 0., 3.142, 0.],
-            [0., 0., 0., 0., 0., 0.]
-        ])
-        
-        phiArr = np.array([
-            [0., 0., 0., 0., 0., 0.],
-            [0., 0., 4.712, 4.544, 5.375, 3.816],
-            [0., 0., 0., 1.571, 2.188, 4.712],
-            [0., 0., 0., 0., 5.498, 1.571],
-            [0., 0., 0., 0., 0., 3.142],
-            [0., 0., 0., 0., 0., 0.]
-        ])
-        
-        phaseshiftArr = np.zeros(7)
-        
-        super(IdealCNOTCircuit, self).__init__(7, alphaArr, phiArr, phaseshiftArr)
+    inputIndices = np.array([
+        np.where((fockBasis == inputStates[i]).all(axis=1))
+        for i in range(np.size(inputStates, 0))
+    ], dtype=int)
     
-    def getTruthTable(self):
-        inputStates = np.array([[1, 1, 0, 1, 0, 1, 0],
-                                [1, 1, 0, 0, 1, 1, 0],
-                                [0, 1, 1, 1, 0, 1, 0],
-                                [0, 1, 1, 0, 1, 1, 0]])
+    inputComp = np.zeros((fockBasis.shape[0], numPhotons), dtype='complex')
+
+    for i in range(numPhotons):
+        inputComp[inputIndices[i,0], i] = 1
         
-        return self.transform(numPhotons=4, inputStates=inputStates, isNormalized=True)
+    outputComp = fockU.dot(inputComp)
+    outputProb = np.abs(outputComp)[inputIndices].T ** 2
+    
+    if isNormalized:
+        outputProb = outputProb / np.sum(outputProb, axis=0) 
+    
+    return outputProb
+
+'''
+    Compute ideal CNOT gate truth table as an example.
+
+    NOTE: THE PARAMETERS HERE DON'T WORK!
+'''
+def getIdealCNOTTruthTable():
+    numModes = 7
+    numPhotons = 4
+
+    alphaArr = np.array([
+        0, 0, 0, 0, 0, 0,
+        0.992, 1.571, 4.957, 1.792, 0.,
+        1.571, 0.992, 0., 0,
+        1.571, 0., 2.226,
+        3.142, 0.,
+        0.])
+    
+    phiArr = np.array([
+        0., 0., 0., 0., 0., 0.,
+        0., 4.712, 4.544, 5.375, 3.816,
+        0., 1.571, 2.188, 4.712,
+        0., 5.498, 1.571,
+        0., 3.142,
+        0.]
+    )
+    
+    phaseshiftArr = np.zeros(7)
+
+    phaseArr = np.concatenate([alphaArr, phiArr, phaseshiftArr])
+
+    inputStates = np.array([[1, 1, 0, 1, 0, 1, 0],
+                            [1, 1, 0, 0, 1, 1, 0],
+                            [0, 1, 1, 1, 0, 1, 0],
+                            [0, 1, 1, 0, 1, 1, 0]])
+
+    return getOutputProb(numModes, numPhotons, phaseArr, inputStates, isNormalized=True)
         
 if __name__=='__main__':
-    idealCnot = IdealCNOTCircuit()
-    cnot_truth_table_plot = idealCnot.getTruthTable().ravel()
+    cnot_truth_table_plot = getIdealCNOTTruthTable().ravel()
 
     fig_cnot = plt.figure(figsize=(6,6))
     ax1 = fig_cnot.add_subplot(111, projection='3d')
