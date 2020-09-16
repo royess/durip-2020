@@ -1,6 +1,5 @@
 import bosonic
-import numpy as np
-from scipy.linalg import block_diag
+import autograd.numpy as np
 import matplotlib.pyplot as plt
 import functools
 
@@ -12,6 +11,13 @@ def mzi(alpha, phi):
         [np.exp(1j*phi) * (np.exp(1j*alpha)+1), np.exp(1j*alpha)-1],
         [np.exp(1j*phi) * (np.exp(1j*alpha)-1), np.exp(1j*alpha)+1]
     ]) # TODO: whether this is the right expression!
+
+def embeddedMzi(alpha, phi, mode, numModes):
+    U = np.concatenate([
+        np.concatenate([np.eye(mode), np.zeros((mode, 2)), np.zeros((mode, numModes-mode-2))], axis=1),
+        np.concatenate([np.zeros((2, mode)), mzi(alpha, phi), np.zeros((2, numModes-mode-2))], axis=1),
+        np.concatenate([np.zeros((numModes-mode-2, mode)), np.zeros((numModes-mode-2, 2)), np.eye(numModes-mode-2)], axis=1)], axis=0)
+    return U
 
 '''
     Compute multi-photon unitary matrix from phase array.
@@ -37,18 +43,19 @@ def getMultiPhotonU(numModes, numPhotons, phaseArr):
 
     def getIdx(i, j, numModes):
         return ((1/2*(2*numModes-i)*(i-1) + (j-i)))
+    
+    singleU = np.diag(np.exp(1j*phaseArr[numModes*(numModes-1):]))
+    
+    for pair in orderedPairs:
+        singleU = np.dot(singleU,
+                        embeddedMzi(
+                            phaseArr[int(getIdx(pair[0],pair[1],numModes))],
+                            phaseArr[int(getIdx(pair[0],pair[1],numModes) + numModes*(numModes-1)/2)],
+                            pair[1]-1, numModes))
+    
+    multiU = bosonic.aa_phi(singleU, numPhotons)
 
-    singleU =  np.linalg.multi_dot(
-        [np.diag(np.exp(1j*phaseArr[numModes*(numModes-1):]))]
-        + [block_diag(
-            np.eye(pair[1]-1),
-            mzi(
-                phaseArr[int(getIdx(pair[0],pair[1],numModes))],
-                phaseArr[int(getIdx(pair[0],pair[1],numModes) + numModes*(numModes-1)/2)]),
-            np.eye(numModes-1-pair[1]))
-            for pair in orderedPairs])
-
-    return bosonic.aa_phi(singleU.astype('complex'), numPhotons)
+    return multiU
 
 '''
     Compute output probabilities wrt input states
@@ -68,7 +75,7 @@ def getOutputProb(numModes, numPhotons, phaseArr, inputStates, isNormalized=Fals
     for i in range(numPhotons):
         inputComp[inputIndices[i,0], i] = 1
         
-    outputComp = fockU.dot(inputComp)
+    outputComp = np.dot(fockU, inputComp)
     outputProb = np.abs(outputComp)[inputIndices].T ** 2
     
     if isNormalized:
